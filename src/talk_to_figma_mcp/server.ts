@@ -953,6 +953,139 @@ Example Login Screen Structure:
   }
 );
 
+// Define modern design system guide prompt
+server.prompt(
+  "modern_design_system_guide",
+  "Guide to creating and using modern design systems for UI/UX",
+  (extra) => {
+    return {
+      messages: [
+        {
+          role: "assistant",
+          content: {
+            type: "text",
+            text: `# Modern Design System Guide for Figma
+
+## Core Principles of Modern UI/UX Design
+
+### 1. Visual Hierarchy
+- Use size, color, and spacing to guide users' attention
+- Important elements should be larger, bolder, or higher contrast
+- Create clear content sections with consistent spacing
+- Use a 8px or 4px grid system for all spacing decisions
+
+### 2. Design Tokens
+- Define reusable design tokens for all visual properties:
+  * Colors: Primary, secondary, accent, neutral, semantic (success, error, warning)
+  * Typography: Scale with clear roles (heading, body, caption, etc.)
+  * Spacing: Standard increments (usually based on 4px or 8px)
+  * Borders and Radii: Consistent rounding and stroke weights
+  * Shadows: Layering system with consistent elevation levels
+
+### 3. Component Architecture
+- Build a component system with nested components:
+  * Atoms: Basic UI elements (buttons, inputs, icons)
+  * Molecules: Simple combinations of atoms (search bars, menu items)
+  * Organisms: Complex UI sections (navigation bars, forms)
+  * Templates: Page layouts with organisms arranged in position
+- Use variants for component states (default, hover, active, disabled)
+- Use properties for component configuration (size, color, etc.)
+
+## Modern Mobile Design Patterns
+
+### 1. Navigation
+- Bottom navigation bar for primary destinations (iOS/Android)
+- Floating action button (FAB) for primary actions
+- Modal sheets and drawers for secondary navigation
+- Tab bars for switching between related content
+- Swipe gestures for common actions
+
+### 2. Input & Forms
+- Simple, focused forms with minimal fields
+- Floating labels that move above inputs when active
+- Inline validation with clear error messages
+- Segmented controls for limited options
+- Bottom sheets for selection dialogs
+
+### 3. Content Display
+- Cards for encapsulating related content
+- List views with clear hierarchy
+- Pull-to-refresh for content updates
+- Infinite scrolling instead of pagination
+- Skeleton screens for loading states
+
+## Mobile-First Best Practices
+
+### 1. Touch Targets
+- Minimum touch target size: 44×44 pixels (iOS), 48×48 pixels (Android)
+- Adequate spacing between interactive elements (min 8px)
+- Place primary actions within thumb reach zone
+- Avoid hover-dependent interactions
+
+### 2. Typography
+- Minimum readable text size: 14px (16px recommended for body)
+- High contrast for readability (WCAG AA minimum: 4.5:1)
+- Limited number of font styles and weights (2-3 fonts max)
+- Line height: 1.4-1.6× font size for good readability
+
+### 3. Responsive Layouts
+- Flexible layouts that adapt to different screen sizes
+- Auto layout for dynamic content
+- Strategic use of white space
+- Consider both portrait and landscape orientations
+
+## Accessibility Guidelines
+
+### 1. Visual Considerations
+- Color contrast ratios: 4.5:1 for normal text, 3:1 for large text
+- Don't rely solely on color to convey information
+- Support dark mode with proper contrast
+- Test designs in grayscale for color blindness
+
+### 2. Interactive Elements
+- Clear focus states for keyboard navigation
+- Provide text alternatives for images and icons
+- Ensure sufficient spacing between interactive elements
+- Make form fields and inputs clearly identifiable
+
+### 3. Structure and Flow
+- Logical reading and navigation order
+- Clear, descriptive headings and labels
+- Consistent, predictable layouts
+- Error messages that are easy to identify and understand
+
+## Implementing in Figma
+
+### 1. Setup Design Tokens
+- Create color styles with semantic naming (e.g., "Brand/Primary/500")
+- Define text styles for each typography role and size
+- Create effect styles for shadows and blurs
+- Use component properties for variations
+
+### 2. Build Component Library
+- Start with fundamental components (buttons, inputs, cards)
+- Use auto layout for responsive behavior
+- Create variants for different states and types
+- Add interactive prototyping connections for testing
+
+### 3. Documentation
+- Add descriptive component names and descriptions
+- Include usage guidelines in component descriptions
+- Create a dedicated documentation page in your Figma file
+- Document component props and their possible values
+
+### 4. Best Practices
+- Use auto layout for most components
+- Maintain consistent layer naming conventions
+- Create responsive components that scale appropriately
+- Test designs across multiple device sizes`
+          }
+        }
+      ],
+    };
+  }
+);
+
 // Define command types and parameters
 type FigmaCommand =
   | 'get_document_info'
@@ -985,7 +1118,14 @@ type FigmaCommand =
   | 'get_ui_kit_libraries'
   | 'get_ui_kit_components'
   | 'create_ui_kit_component'
-  | 'create_ui_kit_layout';
+  | 'create_ui_kit_layout'
+  | 'create_responsive_frame'
+  | 'apply_design_tokens'
+  | 'create_mobile_pattern'
+  | 'check_accessibility'
+  | 'create_design_token'
+  | 'create_mobile_screen'
+  | 'analyze_ui_design';
 
 // Helper function to process Figma node responses
 function processFigmaNodeResponse(result: unknown): any {
@@ -1480,6 +1620,287 @@ server.tool(
           {
             type: "text",
             text: `Error setting constraints: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+// Responsive Design Commands
+server.tool(
+  "mcp_TalkToFigma_create_responsive_frame",
+  "Create a responsive frame with breakpoints for different device sizes",
+  {
+    name: z.string().describe("Name for the responsive frame"),
+    deviceType: z.enum(['mobile', 'tablet', 'desktop', 'all']).describe("Device type to create breakpoints for"),
+    x: z.number().describe("X position"),
+    y: z.number().describe("Y position"),
+    theme: z.enum(['light', 'dark']).optional().describe("Theme for the responsive frame"),
+    parentId: z.string().optional().describe("Optional parent node ID")
+  },
+  async ({ name, deviceType, x, y, theme, parentId }) => {
+    try {
+      const result = await sendCommandToFigma('create_responsive_frame', {
+        name,
+        deviceType,
+        x,
+        y,
+        theme: theme || 'light',
+        parentId
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Created responsive frame: ${JSON.stringify(result, null, 2)}`
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error creating responsive frame: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+// Design Token Management Tool
+server.tool(
+  "mcp_TalkToFigma_apply_design_tokens",
+  "Apply design tokens (colors, typography, spacing) to selected elements",
+  {
+    tokenType: z.enum(['color', 'typography', 'spacing', 'shadow', 'all']).describe("Type of design token to apply"),
+    styleName: z.string().describe("Name of the style/token to apply"),
+    nodeIds: z.array(z.string()).describe("Array of node IDs to apply the token to")
+  },
+  async ({ tokenType, styleName, nodeIds }) => {
+    try {
+      const result = await sendCommandToFigma('apply_design_tokens', {
+        tokenType,
+        styleName,
+        nodeIds
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Applied design tokens: ${JSON.stringify(result, null, 2)}`
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error applying design tokens: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+// Modern Mobile Patterns Tool
+server.tool(
+  "mcp_TalkToFigma_create_mobile_pattern",
+  "Create modern mobile UI patterns (bottom sheets, cards, etc.)",
+  {
+    patternType: z.enum(['bottomSheet', 'actionSheet', 'card', 'toast', 'swipeActions', 'tabBar', 'carousel']).describe("Type of mobile pattern to create"),
+    x: z.number().describe("X position"),
+    y: z.number().describe("Y position"),
+    width: z.number().optional().describe("Optional width"),
+    height: z.number().optional().describe("Optional height"),
+    theme: z.enum(['light', 'dark']).optional().describe("Optional theme"),
+    data: z.record(z.any()).optional().describe("Optional data to populate the pattern"),
+    parentId: z.string().optional().describe("Optional parent node ID")
+  },
+  async ({ patternType, x, y, width, height, theme, data, parentId }) => {
+    try {
+      const result = await sendCommandToFigma('create_mobile_pattern', {
+        patternType,
+        x,
+        y,
+        width,
+        height,
+        theme: theme || 'light',
+        data: data || {},
+        parentId
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Created mobile pattern: ${JSON.stringify(result, null, 2)}`
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error creating mobile pattern: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+// Accessibility Checker Tool
+server.tool(
+  "mcp_TalkToFigma_check_accessibility",
+  "Check accessibility of selected elements (color contrast, text size, etc.)",
+  {
+    nodeIds: z.array(z.string()).describe("Array of node IDs to check"),
+    checkType: z.enum(['contrast', 'textSize', 'hierarchy', 'all']).optional().describe("Type of accessibility check to perform")
+  },
+  async ({ nodeIds, checkType }) => {
+    try {
+      const result = await sendCommandToFigma('check_accessibility', {
+        nodeIds,
+        checkType: checkType || 'all'
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Accessibility check results: ${JSON.stringify(result, null, 2)}`
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error checking accessibility: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+// Design System Token Creation Tool
+server.tool(
+  "mcp_TalkToFigma_create_design_token",
+  "Create reusable design system tokens for consistent designs",
+  {
+    tokenType: z.enum(['color', 'typography', 'spacing', 'effect', 'radius']).describe("Type of design token to create"),
+    tokenName: z.string().describe("Name for the token (e.g., 'primary', 'heading-large')"),
+    tokenValue: z.any().describe("Value for the token (color object, typography settings, etc.)"),
+    tokenCategory: z.string().optional().describe("Optional category grouping for the token")
+  },
+  async ({ tokenType, tokenName, tokenValue, tokenCategory }) => {
+    try {
+      const result = await sendCommandToFigma('create_design_token', {
+        tokenType,
+        tokenName,
+        tokenValue,
+        tokenCategory
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Created design token: ${JSON.stringify(result)}`
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error creating design token: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+// Mobile Screen Creation Tool
+server.tool(
+  "mcp_TalkToFigma_create_mobile_screen",
+  "Create complete mobile UI screens with standard patterns",
+  {
+    screenType: z.enum(['login', 'profile', 'settings', 'feed', 'product', 'onboarding']).describe("Type of screen to create"),
+    x: z.number().describe("X position"),
+    y: z.number().describe("Y position"),
+    deviceType: z.enum(['iphone', 'android', 'responsive']).default('iphone').describe("Device form factor"),
+    theme: z.enum(['light', 'dark', 'system']).default('light').describe("Color theme"),
+    data: z.record(z.any()).optional().describe("Optional data to populate the screen")
+  },
+  async ({ screenType, x, y, deviceType, theme, data }) => {
+    try {
+      const result = await sendCommandToFigma('create_mobile_screen', {
+        screenType,
+        x,
+        y,
+        deviceType,
+        theme,
+        data: data || {}
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Created mobile screen: ${JSON.stringify(result)}`
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error creating mobile screen: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+// UI Design Analysis Tool
+server.tool(
+  "mcp_TalkToFigma_analyze_ui_design",
+  "Analyze UI design for accessibility, UX best practices, and consistency",
+  {
+    nodeId: z.string().optional().describe("Optional node ID to analyze; defaults to current selection if omitted"),
+    analysisType: z.enum(['accessibility', 'consistency', 'mobile-ux', 'web-ux', 'all']).default('all').describe("Type of analysis to perform"),
+    generateReport: z.boolean().default(false).describe("Whether to generate a detailed report frame in the document")
+  },
+  async ({ nodeId, analysisType, generateReport }) => {
+    try {
+      const result = await sendCommandToFigma('analyze_ui_design', {
+        nodeId,
+        analysisType,
+        generateReport
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Design analysis complete: ${JSON.stringify(result, null, 2)}`
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error analyzing design: ${error instanceof Error ? error.message : String(error)}`
           }
         ]
       };

@@ -124,6 +124,20 @@ async function handleCommand(command, params) {
       return await createComponentSet(params);
     case "set_constraints":
       return await setConstraints(params);
+    case "create_responsive_frame":
+      return await createResponsiveFrame(params);
+    case "apply_design_tokens":
+      return await applyDesignTokens(params);
+    case "create_mobile_pattern":
+      return await createMobilePattern(params);
+    case "check_accessibility":
+      return await checkAccessibility(params);
+    case "create_design_token":
+      return await createDesignToken(params);
+    case "create_mobile_screen":
+      return await createMobileScreen(params);
+    case "analyze_ui_design":
+      return await analyzeUIDesign(params);
     default:
       throw new Error(`Unknown command: ${command}`);
   }
@@ -635,1354 +649,134 @@ async function deleteNode(params) {
   return nodeInfo;
 }
 
-async function getStyles() {
-  const styles = {
-    colors: await figma.getLocalPaintStylesAsync(),
-    texts: await figma.getLocalTextStylesAsync(),
-    effects: await figma.getLocalEffectStylesAsync(),
-    grids: await figma.getLocalGridStylesAsync(),
-  };
-
-  return {
-    colors: styles.colors.map((style) => ({
-      id: style.id,
-      name: style.name,
-      key: style.key,
-      paint: style.paints[0],
-    })),
-    texts: styles.texts.map((style) => ({
-      id: style.id,
-      name: style.name,
-      key: style.key,
-      fontSize: style.fontSize,
-      fontName: style.fontName,
-    })),
-    effects: styles.effects.map((style) => ({
-      id: style.id,
-      name: style.name,
-      key: style.key,
-    })),
-    grids: styles.grids.map((style) => ({
-      id: style.id,
-      name: style.name,
-      key: style.key,
-    })),
-  };
-}
-
-async function getLocalComponents() {
-  await figma.loadAllPagesAsync();
-
-  const components = figma.root.findAllWithCriteria({
-    types: ["COMPONENT"],
-  });
-
-  return {
-    count: components.length,
-    components: components.map((component) => ({
-      id: component.id,
-      name: component.name,
-      key: "key" in component ? component.key : null,
-    })),
-  };
-}
-
-// Get available UI kit libraries
-async function getUIKitLibraries() {
-  try {
-    // Get published libraries
-    const libraries = await Promise.all(figma.getAvailableLibrariesAsync());
-    
-    // Filter for UI kit libraries (iOS, Material Design, etc.)
-    const uiKitLibraries = libraries.filter(lib => {
-      const name = lib.name.toLowerCase();
-      return name.includes('ui kit') || 
-             name.includes('design kit') || 
-             name.includes('ios') || 
-             name.includes('material') ||
-             name.includes('design system');
-    });
-    
-    return {
-      count: uiKitLibraries.length,
-      libraries: uiKitLibraries.map(lib => ({
-        id: lib.id,
-        name: lib.name,
-        type: lib.type,
-        libraryType: lib.libraryType,
-      }))
-    };
-  } catch (error) {
-    console.error("Error getting UI kit libraries:", error);
-    throw new Error(`Error getting UI kit libraries: ${error.message}`);
-  }
-}
-
-// Get components from a specific UI kit
-async function getUIKitComponents(params) {
-  const { libraryName, category } = params || {};
+// Create a score card for the report
+function createScoreCard(title, score) {
+  const card = figma.createFrame();
+  card.name = `${title} Score`;
+  card.resize(150, 150);
+  card.cornerRadius = 8;
+  card.layoutMode = "VERTICAL";
+  card.counterAxisAlignItems = "CENTER";
+  card.primaryAxisAlignItems = "CENTER";
+  card.itemSpacing = 8;
   
-  if (!libraryName) {
-    throw new Error("Library name is required");
+  // Set color based on score
+  let color;
+  if (score >= 90) {
+    color = { r: 0.2, g: 0.8, b: 0.2 }; // Green
+  } else if (score >= 70) {
+    color = { r: 0.9, g: 0.7, b: 0.1 }; // Yellow
+    } else {
+    color = { r: 0.9, g: 0.2, b: 0.2 }; // Red
   }
   
-  try {
-    // Get all libraries
-    const libraries = await figma.getAvailableLibrariesAsync();
-    
-    // Find the requested library
-    const library = libraries.find(lib => 
-      lib.name.toLowerCase() === libraryName.toLowerCase() ||
-      lib.name.toLowerCase().includes(libraryName.toLowerCase())
-    );
-    
-    if (!library) {
-      throw new Error(`Library not found: ${libraryName}`);
-    }
-    
-    // Get components from the library
-    const componentSets = await Promise.all(figma.getComponentSetsAsync(library.id));
-    const components = await Promise.all(figma.getComponentsAsync(library.id));
-    
-    // Filter by category if provided
-    let filteredComponents = components;
-    let filteredComponentSets = componentSets;
-    
-    if (category) {
-      const categoryLower = category.toLowerCase();
-      filteredComponents = components.filter(comp => 
-        comp.name.toLowerCase().includes(categoryLower) ||
-        (comp.documentationLinks && comp.documentationLinks.some(link => 
-          link.name.toLowerCase().includes(categoryLower)))
-      );
-      
-      filteredComponentSets = componentSets.filter(set => 
-        set.name.toLowerCase().includes(categoryLower) ||
-        (set.documentationLinks && set.documentationLinks.some(link => 
-          link.name.toLowerCase().includes(categoryLower)))
-      );
-    }
-    
-    return {
-      library: {
-        id: library.id,
-        name: library.name
-      },
-      componentSets: filteredComponentSets.map(set => ({
-        id: set.id,
-        name: set.name,
-        key: set.key,
-        description: set.description
-      })),
-      components: filteredComponents.map(comp => ({
-        id: comp.id,
-        name: comp.name,
-        key: comp.key,
-        description: comp.description
-      }))
-    };
-  } catch (error) {
-    console.error("Error getting UI kit components:", error);
-    throw new Error(`Error getting UI kit components: ${error.message}`);
-  }
-}
-
-// async function getTeamComponents() {
-//   try {
-//     const teamComponents =
-//       await figma.teamLibrary.getAvailableComponentsAsync();
-
-//     return {
-//       count: teamComponents.length,
-//       components: teamComponents.map((component) => ({
-//         key: component.key,
-//         name: component.name,
-//         description: component.description,
-//         libraryName: component.libraryName,
-//       })),
-//     };
-//   } catch (error) {
-//     throw new Error(`Error getting team components: ${error.message}`);
-//   }
-// }
-
-async function createComponentInstance(params) {
-  const { componentKey, x = 0, y = 0 } = params || {};
-
-  if (!componentKey) {
-    throw new Error("Missing componentKey parameter");
-  }
-
-  try {
-    const component = await figma.importComponentByKeyAsync(componentKey);
-    const instance = component.createInstance();
-
-    instance.x = x;
-    instance.y = y;
-
-    figma.currentPage.appendChild(instance);
-
-    return {
-      id: instance.id,
-      name: instance.name,
-      x: instance.x,
-      y: instance.y,
-      width: instance.width,
-      height: instance.height,
-      componentId: instance.componentId,
-    };
-  } catch (error) {
-    throw new Error(`Error creating component instance: ${error.message}`);
-  }
-}
-
-// Create a UI kit component with more options
-async function createUIKitComponent(params) {
-  const { libraryName, componentName, x, y, properties, parentId } = params || {};
+  card.fills = [{ type: 'SOLID', color: { r: 0.95, g: 0.95, b: 0.95 } }];
   
-  if (!libraryName || !componentName) {
-    throw new Error("Library name and component name are required");
+  // Title text
+  const titleText = figma.createText();
+  titleText.characters = title;
+  titleText.fontSize = 16;
+  titleText.fontName = { family: "Inter", style: "Medium" };
+  card.appendChild(titleText);
+  
+  // Score text
+  const scoreText = figma.createText();
+  scoreText.characters = Math.round(score).toString();
+  scoreText.fontSize = 48;
+  scoreText.fontName = { family: "Inter", style: "Bold" };
+  scoreText.fills = [{ type: 'SOLID', color }];
+  card.appendChild(scoreText);
+  
+  return card;
+}
+
+// Create issues list for the report
+async function createIssuesList(issues, severity) {
+  const list = figma.createFrame();
+  list.name = `${severity} Issues`;
+  list.layoutMode = "VERTICAL";
+  list.itemSpacing = 8;
+  list.fills = [];
+  list.counterAxisSizingMode = "AUTO";
+  list.primaryAxisSizingMode = "AUTO";
+  
+  // Add each issue
+  for (const issue of issues.slice(0, 5)) { // Show first 5 issues
+        const item = figma.createFrame();
+    item.name = "Issue";
+    item.layoutMode = "VERTICAL";
+    item.itemSpacing = 4;
+    item.paddingLeft = 12;
+    item.paddingRight = 12;
+    item.paddingTop = 8;
+    item.paddingBottom = 8;
+    item.cornerRadius = 4;
+        item.fills = [{ 
+          type: 'SOLID', 
+      color: severity === "high" 
+        ? { r: 1, g: 0.9, b: 0.9 } 
+        : severity === "medium" 
+          ? { r: 1, g: 0.95, b: 0.8 } 
+          : { r: 0.9, g: 0.9, b: 1 } 
+    }];
+    
+    const text = figma.createText();
+    text.characters = issue.message;
+    text.fontSize = 14;
+    text.layoutAlign = "STRETCH";
+    item.appendChild(text);
+    
+    list.appendChild(item);
   }
   
-  try {
-    // Get all libraries
-    const libraries = await figma.getAvailableLibrariesAsync();
-    
-    // Find the requested library
-    const library = libraries.find(lib => 
-      lib.name.toLowerCase() === libraryName.toLowerCase() ||
-      lib.name.toLowerCase().includes(libraryName.toLowerCase())
-    );
-    
-    if (!library) {
-      throw new Error(`Library not found: ${libraryName}`);
-    }
-    
-    // Get components from the library
-    const components = await Promise.all(figma.getComponentsAsync(library.id));
-    const componentSets = await Promise.all(figma.getComponentSetsAsync(library.id));
-    
-    // Find the requested component by name
-    const component = components.find(comp => 
-      comp.name.toLowerCase() === componentName.toLowerCase() ||
-      comp.name.toLowerCase().includes(componentName.toLowerCase())
-    );
-    
-    // If component not found directly, try to find it in component sets
-    let instance;
-    if (component) {
-      // Create instance of the component
-      instance = await figma.createComponentInstanceAsync(component.key);
-    } else {
-      // Try to find the component in component sets
-      for (const set of componentSets) {
-        if (set.name.toLowerCase() === componentName.toLowerCase() ||
-            set.name.toLowerCase().includes(componentName.toLowerCase())) {
-          // Get variants from this component set
-          const variants = await Promise.all(figma.getComponentsBySetIdAsync(set.id));
-          if (variants.length > 0) {
-            // Use the first variant or the one that matches properties
-            let selectedVariant = variants[0];
-            
-            // If properties are provided, try to find a matching variant
-            if (properties && Object.keys(properties).length > 0) {
-              const matchingVariant = variants.find(variant => {
-                const variantName = variant.name.toLowerCase();
-                return Object.entries(properties).every(([key, value]) => {
-                  const propertyPattern = `${key.toLowerCase()}=${value.toLowerCase()}`;
-                  return variantName.includes(propertyPattern);
-                });
-              });
-              
-              if (matchingVariant) {
-                selectedVariant = matchingVariant;
-              }
-            }
-            
-            instance = await figma.createComponentInstanceAsync(selectedVariant.key);
-            break;
-          }
-        }
-      }
-    }
-    
-    if (!instance) {
-      throw new Error(`Component not found: ${componentName}`);
-    }
-    
-    // Set position
-    instance.x = x || 0;
-    instance.y = y || 0;
-    
-    // Set properties if available
-    if (properties && Object.keys(properties).length > 0 && instance.setProperties) {
-      // Convert properties to a format Figma expects
-      const figmaProperties = {};
-      for (const [key, value] of Object.entries(properties)) {
-        figmaProperties[key] = value;
-      }
-      
-      try {
-        instance.setProperties(figmaProperties);
-      } catch (propError) {
-        console.warn(`Error setting properties: ${propError.message}`);
-      }
-    }
-    
-    // Add to parent if specified
-    if (parentId) {
-      const parent = await figma.getNodeByIdAsync(parentId);
-      if (parent && 'appendChild' in parent) {
-        parent.appendChild(instance);
-      }
-    }
-    
-    return {
-      id: instance.id,
-      name: instance.name,
-      type: instance.type,
-      library: library.name,
-      component: componentName
-    };
-  } catch (error) {
-    console.error("Error creating UI kit component:", error);
-    throw new Error(`Error creating UI kit component: ${error.message}`);
-  }
-}
-
-// Create a layout using UI kit components
-async function createUIKitLayout(params) {
-  const { 
-    libraryName, 
-    layoutType, 
-    x = 0, 
-    y = 0, 
-    width = 390, 
-    height = 844, 
-    theme = 'light',
-    data = {},
-    parentId 
-  } = params || {};
-  
-  if (!libraryName || !layoutType) {
-    throw new Error("Library name and layout type are required");
+  // Add "more" text if there are more issues
+  if (issues.length > 5) {
+    const moreText = figma.createText();
+    moreText.characters = `...and ${issues.length - 5} more issues`;
+    moreText.fontSize = 12;
+    moreText.fills = [{ type: 'SOLID', color: { r: 0.5, g: 0.5, b: 0.5 } }];
+    list.appendChild(moreText);
   }
   
-  try {
-    // Create parent frame for the layout
-    const frame = figma.createFrame();
-    frame.name = `${libraryName} - ${layoutType} Layout`;
-    frame.x = x;
-    frame.y = y;
-    frame.resize(width, height);
-    
-    // Set fill color based on theme
-    if (theme === 'dark') {
-      frame.fills = [{ type: 'SOLID', color: { r: 0.1, g: 0.1, b: 0.1 } }];
-    } else {
-      frame.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
-    }
-    
-    // Add to parent if specified
-    if (parentId) {
-      const parent = await figma.getNodeByIdAsync(parentId);
-      if (parent && 'appendChild' in parent) {
-        parent.appendChild(frame);
-      }
-    }
-    
-    // Create layout based on layoutType
-    switch (layoutType.toLowerCase()) {
-      case 'login':
-        await createLoginLayout(libraryName, frame, theme, data);
-        break;
-      case 'profile':
-        await createProfileLayout(libraryName, frame, theme, data);
-        break;
-      case 'settings':
-        await createSettingsLayout(libraryName, frame, theme, data);
-        break;
-      case 'onboarding':
-        await createOnboardingLayout(libraryName, frame, theme, data);
-        break;
-      default:
-        // Generic layout with basic components
-        await createGenericLayout(libraryName, frame, theme, data);
-    }
-    
-    return {
-      id: frame.id,
-      name: frame.name,
-      type: frame.type,
-      width: frame.width,
-      height: frame.height
-    };
-  } catch (error) {
-    console.error("Error creating UI kit layout:", error);
-    throw new Error(`Error creating UI kit layout: ${error.message}`);
-  }
+  return list;
 }
 
-// Helper function to create login layout
-async function createLoginLayout(libraryName, frame, theme, data) {
-  try {
-    // Create header
-    const header = figma.createText();
-    header.characters = data.title || "Sign In";
-    header.fontSize = 24;
-    header.fontName = { family: "Inter", style: "Bold" };
-    header.x = frame.width / 2 - header.width / 2;
-    header.y = 80;
-    header.textAlignHorizontal = "CENTER";
-    
-    // Create subtitle
-    const subtitle = figma.createText();
-    subtitle.characters = data.subtitle || "Enter your credentials to continue";
-    subtitle.fontSize = 16;
-    subtitle.fontName = { family: "Inter", style: "Regular" };
-    subtitle.x = frame.width / 2 - subtitle.width / 2;
-    subtitle.y = header.y + header.height + 16;
-    subtitle.textAlignHorizontal = "CENTER";
-    
-    // Create email field
-    const emailField = figma.createRectangle();
-    emailField.name = "Email Field";
-    emailField.x = frame.width * 0.1;
-    emailField.y = subtitle.y + subtitle.height + 40;
-    emailField.resize(frame.width * 0.8, 50);
-    emailField.cornerRadius = 8;
-    
-    // Apply theme
-    if (theme === 'dark') {
-      emailField.fills = [{ type: 'SOLID', color: { r: 0.2, g: 0.2, b: 0.2 } }];
-      header.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
-      subtitle.fills = [{ type: 'SOLID', color: { r: 0.8, g: 0.8, b: 0.8 } }];
-    } else {
-      emailField.fills = [{ type: 'SOLID', color: { r: 0.95, g: 0.95, b: 0.95 } }];
-      header.fills = [{ type: 'SOLID', color: { r: 0, g: 0, b: 0 } }];
-      subtitle.fills = [{ type: 'SOLID', color: { r: 0.5, g: 0.5, b: 0.5 } }];
-    }
-    
-    // Email label
-    const emailLabel = figma.createText();
-    emailLabel.characters = "Email";
-    emailLabel.fontSize = 16;
-    emailLabel.x = emailField.x + 12;
-    emailLabel.y = emailField.y + (emailField.height - emailLabel.height) / 2;
-    
-    // Create password field
-    const passwordField = figma.createRectangle();
-    passwordField.name = "Password Field";
-    passwordField.x = emailField.x;
-    passwordField.y = emailField.y + emailField.height + 16;
-    passwordField.resize(emailField.width, emailField.height);
-    passwordField.cornerRadius = emailField.cornerRadius;
-    passwordField.fills = emailField.fills;
-    
-    // Password label
-    const passwordLabel = figma.createText();
-    passwordLabel.characters = "Password";
-    passwordLabel.fontSize = 16;
-    passwordLabel.x = passwordField.x + 12;
-    passwordLabel.y = passwordField.y + (passwordField.height - passwordLabel.height) / 2;
-    
-    // Create login button
-    const loginButton = figma.createRectangle();
-    loginButton.name = "Login Button";
-    loginButton.x = emailField.x;
-    loginButton.y = passwordField.y + passwordField.height + 32;
-    loginButton.resize(emailField.width, emailField.height);
-    loginButton.cornerRadius = 8;
-    
-    // Apply accent color
-    const accentColor = theme === 'dark' 
-      ? { r: 0.2, g: 0.6, b: 1 } 
-      : { r: 0.1, g: 0.4, b: 0.9 };
-    
-    loginButton.fills = [{ type: 'SOLID', color: accentColor }];
-    
-    // Login button text
-    const buttonText = figma.createText();
-    buttonText.characters = data.buttonText || "Sign In";
-    buttonText.fontSize = 16;
-    buttonText.fontName = { family: "Inter", style: "Bold" };
-    buttonText.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
-    
-    // Center the text in the button
-    buttonText.x = loginButton.x + (loginButton.width - buttonText.width) / 2;
-    buttonText.y = loginButton.y + (loginButton.height - buttonText.height) / 2;
-    
-    // "Forgot password" link
-    const forgotPassword = figma.createText();
-    forgotPassword.characters = "Forgot Password?";
-    forgotPassword.fontSize = 14;
-    forgotPassword.x = frame.width / 2 - forgotPassword.width / 2;
-    forgotPassword.y = loginButton.y + loginButton.height + 24;
-    
-    // Apply theme to forgot password
-    if (theme === 'dark') {
-      forgotPassword.fills = [{ type: 'SOLID', color: { r: 0.5, g: 0.7, b: 1 } }];
-    } else {
-      forgotPassword.fills = [{ type: 'SOLID', color: { r: 0.1, g: 0.4, b: 0.9 } }];
-    }
-    
-    // Add all elements to the frame
-    frame.appendChild(header);
-    frame.appendChild(subtitle);
-    frame.appendChild(emailField);
-    frame.appendChild(emailLabel);
-    frame.appendChild(passwordField);
-    frame.appendChild(passwordLabel);
-    frame.appendChild(loginButton);
-    frame.appendChild(buttonText);
-    frame.appendChild(forgotPassword);
-  } catch (error) {
-    console.error("Error creating login layout:", error);
-    throw error;
-  }
-}
-
-// Helper function to create a generic layout 
-async function createGenericLayout(libraryName, frame, theme, data) {
-  try {
-    // Create a navigation bar
-    const navBar = figma.createRectangle();
-    navBar.name = "Navigation Bar";
-    navBar.x = 0;
-    navBar.y = 0;
-    navBar.resize(frame.width, 60);
-    
-    // Apply theme to navigation bar
-    if (theme === 'dark') {
-      navBar.fills = [{ type: 'SOLID', color: { r: 0.15, g: 0.15, b: 0.15 } }];
-    } else {
-      navBar.fills = [{ type: 'SOLID', color: { r: 0.98, g: 0.98, b: 0.98 } }];
-    }
-    
-    // Add title to navigation bar
-    const title = figma.createText();
-    title.characters = data.title || "Screen Title";
-    title.fontSize = 18;
-    title.fontName = { family: "Inter", style: "Bold" };
-    
-    // Center the title in the navigation bar
-    title.x = navBar.width / 2 - title.width / 2;
-    title.y = navBar.y + (navBar.height - title.height) / 2;
-    
-    // Apply theme to title
-    if (theme === 'dark') {
-      title.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
-    } else {
-      title.fills = [{ type: 'SOLID', color: { r: 0, g: 0, b: 0 } }];
-    }
-    
-    // Add elements to the frame
-    frame.appendChild(navBar);
-    frame.appendChild(title);
-    
-    // Add content placeholder
-    const contentPlaceholder = figma.createRectangle();
-    contentPlaceholder.name = "Content Area";
-    contentPlaceholder.x = 16;
-    contentPlaceholder.y = navBar.height + 16;
-    contentPlaceholder.resize(frame.width - 32, frame.height - navBar.height - 32);
-    contentPlaceholder.cornerRadius = 8;
-    
-    // Apply theme to content placeholder
-    if (theme === 'dark') {
-      contentPlaceholder.fills = [{ type: 'SOLID', color: { r: 0.2, g: 0.2, b: 0.2 } }];
-    } else {
-      contentPlaceholder.fills = [{ type: 'SOLID', color: { r: 0.95, g: 0.95, b: 0.95 } }];
-    }
-    
-    frame.appendChild(contentPlaceholder);
-  } catch (error) {
-    console.error("Error creating generic layout:", error);
-    throw error;
-  }
-}
-
-// Implement other layout helper functions as needed
-async function createProfileLayout(libraryName, frame, theme, data) {
-  // Implementation similar to createLoginLayout but for profile screens
-  await createGenericLayout(libraryName, frame, theme, { title: "Profile" });
-}
-
-async function createSettingsLayout(libraryName, frame, theme, data) {
-  // Implementation similar to createLoginLayout but for settings screens
-  await createGenericLayout(libraryName, frame, theme, { title: "Settings" });
-}
-
-async function createOnboardingLayout(libraryName, frame, theme, data) {
-  // Implementation similar to createLoginLayout but for onboarding screens
-  await createGenericLayout(libraryName, frame, theme, { title: "Welcome" });
-}
-
-async function exportNodeAsImage(params) {
-  const { nodeId, format = "PNG", scale = 1 } = params || {};
-
-  if (!nodeId) {
-    throw new Error("Missing nodeId parameter");
-  }
-
-  const node = await figma.getNodeByIdAsync(nodeId);
-  if (!node) {
-    throw new Error(`Node not found with ID: ${nodeId}`);
-  }
-
-  if (!("exportAsync" in node)) {
-    throw new Error(`Node does not support exporting: ${nodeId}`);
-  }
-
-  try {
-    const settings = {
-      format: format,
-      constraint: { type: "SCALE", value: scale },
-    };
-
-    const bytes = await node.exportAsync(settings);
-
-    let mimeType;
-    switch (format) {
-      case "PNG":
-        mimeType = "image/png";
-        break;
-      case "JPG":
-        mimeType = "image/jpeg";
-        break;
-      case "SVG":
-        mimeType = "image/svg+xml";
-        break;
-      case "PDF":
-        mimeType = "application/pdf";
-        break;
-      default:
-        mimeType = "application/octet-stream";
-    }
-
-    // Convert to base64
-    const uint8Array = new Uint8Array(bytes);
-    let binary = "";
-    for (let i = 0; i < uint8Array.length; i++) {
-      binary += String.fromCharCode(uint8Array[i]);
-    }
-    const base64 = btoa(binary);
-    const imageData = `data:${mimeType};base64,${base64}`;
-
-    return {
-      nodeId,
-      format,
-      scale,
-      mimeType,
-      imageData,
-    };
-  } catch (error) {
-    throw new Error(`Error exporting node as image: ${error.message}`);
-  }
-}
-
-async function executeCode(params) {
-  const { code } = params || {};
-
-  if (!code) {
-    throw new Error("Missing code parameter");
-  }
-
-  try {
-    // Execute the provided code
-    // Note: This is potentially unsafe, but matches the Blender MCP functionality
-    const executeFn = new Function(
-      "figma",
-      "selection",
-      `
-      try {
-        const result = (async () => {
-          ${code}
-        })();
-        return result;
-      } catch (error) {
-        throw new Error('Error executing code: ' + error.message);
-      }
-    `
-    );
-
-    const result = await executeFn(figma, figma.currentPage.selection);
-    return { result };
-  } catch (error) {
-    throw new Error(`Error executing code: ${error.message}`);
-  }
-}
-
-async function setCornerRadius(params) {
-  const { nodeId, radius, corners } = params || {};
-
-  if (!nodeId) {
-    throw new Error("Missing nodeId parameter");
-  }
-
-  if (radius === undefined) {
-    throw new Error("Missing radius parameter");
-  }
-
-  const node = await figma.getNodeByIdAsync(nodeId);
-  if (!node) {
-    throw new Error(`Node not found with ID: ${nodeId}`);
-  }
-
-  // Check if node supports corner radius
-  if (!("cornerRadius" in node)) {
-    throw new Error(`Node does not support corner radius: ${nodeId}`);
-  }
-
-  // If corners array is provided, set individual corner radii
-  if (corners && Array.isArray(corners) && corners.length === 4) {
-    if ("topLeftRadius" in node) {
-      // Node supports individual corner radii
-      if (corners[0]) node.topLeftRadius = radius;
-      if (corners[1]) node.topRightRadius = radius;
-      if (corners[2]) node.bottomRightRadius = radius;
-      if (corners[3]) node.bottomLeftRadius = radius;
-    } else {
-      // Node only supports uniform corner radius
-      node.cornerRadius = radius;
-    }
-  } else {
-    // Set uniform corner radius
-    node.cornerRadius = radius;
-  }
-
-  return {
-    id: node.id,
-    name: node.name,
-    cornerRadius: "cornerRadius" in node ? node.cornerRadius : undefined,
-    topLeftRadius: "topLeftRadius" in node ? node.topLeftRadius : undefined,
-    topRightRadius: "topRightRadius" in node ? node.topRightRadius : undefined,
-    bottomRightRadius:
-      "bottomRightRadius" in node ? node.bottomRightRadius : undefined,
-    bottomLeftRadius:
-      "bottomLeftRadius" in node ? node.bottomLeftRadius : undefined,
-  };
-}
-
-async function setTextContent(params) {
-  const { nodeId, text } = params || {};
-
-  if (!nodeId) {
-    throw new Error("Missing nodeId parameter");
-  }
-
-  if (text === undefined) {
-    throw new Error("Missing text parameter");
-  }
-
-  const node = await figma.getNodeByIdAsync(nodeId);
-  if (!node) {
-    throw new Error(`Node not found with ID: ${nodeId}`);
-  }
-
-  if (node.type !== "TEXT") {
-    throw new Error(`Node is not a text node: ${nodeId}`);
-  }
-
-  try {
-    await figma.loadFontAsync(node.fontName);
-    
-    await setCharacters(node, text);
-
-    return {
-      id: node.id,
-      name: node.name,
-      characters: node.characters,
-      fontName: node.fontName
-    };
-  } catch (error) {
-    throw new Error(`Error setting text content: ${error.message}`);
-  }
-}
-
-// Initialize settings on load
-(async function initializePlugin() {
-  try {
-    const savedSettings = await figma.clientStorage.getAsync("settings");
-    if (savedSettings) {
-      if (savedSettings.serverPort) {
-        state.serverPort = savedSettings.serverPort;
-      }
-    }
-
-    // Send initial settings to UI
-    figma.ui.postMessage({
-      type: "init-settings",
-      settings: {
-        serverPort: state.serverPort,
-      },
-    });
-  } catch (error) {
-    console.error("Error loading settings:", error);
-  }
-})();
-
-function uniqBy(arr, predicate) {
-  const cb = typeof predicate === "function" ? predicate : (o) => o[predicate];
-  return [
-    ...arr
-      .reduce((map, item) => {
-        const key = item === null || item === undefined ? item : cb(item);
-
-        map.has(key) || map.set(key, item);
-
-        return map;
-      }, new Map())
-      .values(),
-  ];
-}
-const setCharacters = async (node, characters, options) => {
-  const fallbackFont = (options && options.fallbackFont) || {
-    family: "Inter",
-    style: "Regular",
-  };
-  try {
-    if (node.fontName === figma.mixed) {
-      if (options && options.smartStrategy === "prevail") {
-        const fontHashTree = {};
-        for (let i = 1; i < node.characters.length; i++) {
-          const charFont = node.getRangeFontName(i - 1, i);
-          const key = `${charFont.family}::${charFont.style}`;
-          fontHashTree[key] = fontHashTree[key] ? fontHashTree[key] + 1 : 1;
-        }
-        const prevailedTreeItem = Object.entries(fontHashTree).sort(
-          (a, b) => b[1] - a[1]
-        )[0];
-        const [family, style] = prevailedTreeItem[0].split("::");
-        const prevailedFont = {
-          family,
-          style,
-        };
-        await figma.loadFontAsync(prevailedFont);
-        node.fontName = prevailedFont;
-      } else if (options && options.smartStrategy === "strict") {
-        return setCharactersWithStrictMatchFont(node, characters, fallbackFont);
-      } else if (options && options.smartStrategy === "experimental") {
-        return setCharactersWithSmartMatchFont(node, characters, fallbackFont);
-      } else {
-        const firstCharFont = node.getRangeFontName(0, 1);
-        await figma.loadFontAsync(firstCharFont);
-        node.fontName = firstCharFont;
-      }
-    } else {
-      await figma.loadFontAsync({
-        family: node.fontName.family,
-        style: node.fontName.style,
-      });
-    }
-  } catch (err) {
-    console.warn(
-      `Failed to load "${node.fontName["family"]} ${node.fontName["style"]}" font and replaced with fallback "${fallbackFont.family} ${fallbackFont.style}"`,
-      err
-    );
-    await figma.loadFontAsync(fallbackFont);
-    node.fontName = fallbackFont;
-  }
-  try {
-    node.characters = characters;
-    return true;
-  } catch (err) {
-    console.warn(`Failed to set characters. Skipped.`, err);
-    return false;
-  }
+// Register the command handlers
+const commandHandlers = {
+  "get_document_info": getDocumentInfo,
+  "get_selection": getSelection,
+  "get_node_info": getNodeInfo,
+  "create_rectangle": createRectangle,
+  "create_frame": createFrame,
+  "create_text": createText,
+  "set_fill_color": setFillColor,
+  "set_stroke_color": setStrokeColor,
+  "move_node": moveNode,
+  "resize_node": resizeNode,
+  "delete_node": deleteNode,
+  "get_styles": getStyles,
+  "get_local_components": getLocalComponents,
+  "set_corner_radius": setCornerRadius,
+  "set_text_content": setTextContent,
+  "group_nodes": groupNodes,
+  "create_component_instance": createComponentInstance,
+  "export_node_as_image": exportNodeAsImage,
+  "create_auto_layout": createAutoLayout,
+  "create_vector": createVector,
+  "create_boolean_operation": createBooleanOperation,
+  "apply_effect": applyEffect,
+  "create_component_set": createComponentSet,
+  "set_constraints": setConstraints,
+  "get_ui_kit_libraries": getUIKitLibraries,
+  "get_ui_kit_components": getUIKitComponents,
+  "create_ui_kit_component": createUIKitComponent,
+  "create_ui_kit_layout": createUIKitLayout,
+  "create_responsive_frame": createResponsiveFrame,
+  "apply_design_tokens": applyDesignTokens,
+  "create_mobile_pattern": createMobilePattern,
+  "check_accessibility": checkAccessibility,
+  "create_design_token": createDesignToken,
+  "create_mobile_screen": createMobileScreen,
+  "analyze_ui_design": analyzeUIDesign,
+  "execute_code": executeCode
 };
-
-const setCharactersWithStrictMatchFont = async (
-  node,
-  characters,
-  fallbackFont
-) => {
-  const fontHashTree = {};
-  for (let i = 1; i < node.characters.length; i++) {
-    const startIdx = i - 1;
-    const startCharFont = node.getRangeFontName(startIdx, i);
-    const startCharFontVal = `${startCharFont.family}::${startCharFont.style}`;
-    while (i < node.characters.length) {
-      i++;
-      const charFont = node.getRangeFontName(i - 1, i);
-      if (startCharFontVal !== `${charFont.family}::${charFont.style}`) {
-        break;
-      }
-    }
-    fontHashTree[`${startIdx}_${i}`] = startCharFontVal;
-  }
-  await figma.loadFontAsync(fallbackFont);
-  node.fontName = fallbackFont;
-  node.characters = characters;
-  console.log(fontHashTree);
-  await Promise.all(
-    Object.keys(fontHashTree).map(async (range) => {
-      console.log(range, fontHashTree[range]);
-      const [start, end] = range.split("_");
-      const [family, style] = fontHashTree[range].split("::");
-      const matchedFont = {
-        family,
-        style,
-      };
-      await figma.loadFontAsync(matchedFont);
-      return node.setRangeFontName(Number(start), Number(end), matchedFont);
-    })
-  );
-  return true;
-};
-
-const getDelimiterPos = (str, delimiter, startIdx = 0, endIdx = str.length) => {
-  const indices = [];
-  let temp = startIdx;
-  for (let i = startIdx; i < endIdx; i++) {
-    if (
-      str[i] === delimiter &&
-      i + startIdx !== endIdx &&
-      temp !== i + startIdx
-    ) {
-      indices.push([temp, i + startIdx]);
-      temp = i + startIdx + 1;
-    }
-  }
-  temp !== endIdx && indices.push([temp, endIdx]);
-  return indices.filter(Boolean);
-};
-
-const buildLinearOrder = (node) => {
-  const fontTree = [];
-  const newLinesPos = getDelimiterPos(node.characters, "\n");
-  newLinesPos.forEach(([newLinesRangeStart, newLinesRangeEnd], n) => {
-    const newLinesRangeFont = node.getRangeFontName(
-      newLinesRangeStart,
-      newLinesRangeEnd
-    );
-    if (newLinesRangeFont === figma.mixed) {
-      const spacesPos = getDelimiterPos(
-        node.characters,
-        " ",
-        newLinesRangeStart,
-        newLinesRangeEnd
-      );
-      spacesPos.forEach(([spacesRangeStart, spacesRangeEnd], s) => {
-        const spacesRangeFont = node.getRangeFontName(
-          spacesRangeStart,
-          spacesRangeEnd
-        );
-        if (spacesRangeFont === figma.mixed) {
-          const spacesRangeFont = node.getRangeFontName(
-            spacesRangeStart,
-            spacesRangeStart[0]
-          );
-          fontTree.push({
-            start: spacesRangeStart,
-            delimiter: " ",
-            family: spacesRangeFont.family,
-            style: spacesRangeFont.style,
-          });
-        } else {
-          fontTree.push({
-            start: spacesRangeStart,
-            delimiter: " ",
-            family: spacesRangeFont.family,
-            style: spacesRangeFont.style,
-          });
-        }
-      });
-    } else {
-      fontTree.push({
-        start: newLinesRangeStart,
-        delimiter: "\n",
-        family: newLinesRangeFont.family,
-        style: newLinesRangeFont.style,
-      });
-    }
-  });
-  return fontTree
-    .sort((a, b) => +a.start - +b.start)
-    .map(({ family, style, delimiter }) => ({ family, style, delimiter }));
-};
-
-const setCharactersWithSmartMatchFont = async (
-  node,
-  characters,
-  fallbackFont
-) => {
-  const rangeTree = buildLinearOrder(node);
-  const fontsToLoad = uniqBy(
-    rangeTree,
-    ({ family, style }) => `${family}::${style}`
-  ).map(({ family, style }) => ({
-    family,
-    style,
-  }));
-
-  await Promise.all([...fontsToLoad, fallbackFont].map(figma.loadFontAsync));
-
-  node.fontName = fallbackFont;
-  node.characters = characters;
-
-  let prevPos = 0;
-  rangeTree.forEach(({ family, style, delimiter }) => {
-    if (prevPos < node.characters.length) {
-      const delimeterPos = node.characters.indexOf(delimiter, prevPos);
-      const endPos =
-        delimeterPos > prevPos ? delimeterPos : node.characters.length;
-      const matchedFont = {
-        family,
-        style,
-      };
-      node.setRangeFontName(prevPos, endPos, matchedFont);
-      prevPos = endPos + 1;
-    }
-  });
-  return true;
-};
-
-// Group nodes into a single group
-async function groupNodes(params) {
-  const { nodeIds, name } = params;
-  
-  if (!nodeIds || !Array.isArray(nodeIds) || nodeIds.length < 2) {
-    throw new Error("At least two node IDs are required to create a group");
-  }
-  
-  // Get nodes by IDs
-  const nodes = [];
-  for (const id of nodeIds) {
-    const node = figma.getNodeById(id);
-    if (!node) {
-      throw new Error(`Node with ID ${id} not found`);
-    }
-    nodes.push(node);
-  }
-  
-  // Check if nodes can be grouped (they should have the same parent)
-  const parent = nodes[0].parent;
-  for (const node of nodes) {
-    if (node.parent !== parent) {
-      throw new Error("All nodes must have the same parent to be grouped");
-    }
-  }
-  
-  // Create group
-  const group = figma.group(nodes, parent);
-  if (name) {
-    group.name = name;
-  }
-  
-  return {
-    id: group.id,
-    name: group.name,
-    type: group.type
-  };
-}
-
-// Apply auto layout to a frame
-async function createAutoLayout(params) {
-  const { nodeId, direction, spacing, padding } = params;
-  
-  // Get the node by ID
-  const node = figma.getNodeById(nodeId);
-  if (!node) {
-    throw new Error(`Node with ID ${nodeId} not found`);
-  }
-  
-  // Check if node is a frame or component
-  if (node.type !== "FRAME" && node.type !== "COMPONENT") {
-    throw new Error("Auto layout can only be applied to frames or components");
-  }
-  
-  // Apply auto layout
-  node.layoutMode = direction;
-  node.itemSpacing = spacing;
-  
-  // Apply padding
-  if (padding) {
-    node.paddingTop = padding.top;
-    node.paddingRight = padding.right;
-    node.paddingBottom = padding.bottom;
-    node.paddingLeft = padding.left;
-  }
-  
-  return {
-    id: node.id,
-    name: node.name,
-    type: node.type,
-    layoutMode: node.layoutMode,
-    itemSpacing: node.itemSpacing
-  };
-}
-
-// Create a vector node from SVG path data
-async function createVector(params) {
-  const { pathData, x, y, fillColor, strokeColor, strokeWeight, name, parentId } = params;
-  
-  // Create vector
-  const vector = figma.createVector();
-  
-  // Set name if provided
-  if (name) {
-    vector.name = name;
-  }
-  
-  // Set position
-  vector.x = x;
-  vector.y = y;
-  
-  // Try to set path data (this is a simplified approach)
-  try {
-    // Note: this is a simplification - actual SVG path parsing would be more complex
-    const path = figma.createVectorPath();
-    path.data = pathData;
-    vector.vectorPaths = [path];
-  } catch (error) {
-    throw new Error(`Invalid path data: ${error.message}`);
-  }
-  
-  // Set fill color if provided
-  if (fillColor) {
-    const fill = {
-      type: "SOLID",
-      color: {
-        r: fillColor.r,
-        g: fillColor.g,
-        b: fillColor.b
-      },
-      opacity: fillColor.a !== undefined ? fillColor.a : 1
-    };
-    vector.fills = [fill];
-  }
-  
-  // Set stroke color and weight if provided
-  if (strokeColor) {
-    const stroke = {
-      type: "SOLID",
-      color: {
-        r: strokeColor.r,
-        g: strokeColor.g,
-        b: strokeColor.b
-      },
-      opacity: strokeColor.a !== undefined ? strokeColor.a : 1
-    };
-    vector.strokes = [stroke];
-    
-    if (strokeWeight) {
-      vector.strokeWeight = strokeWeight;
-    }
-  }
-  
-  // Add to parent if provided
-  if (parentId) {
-    const parent = figma.getNodeById(parentId);
-    if (!parent || !("appendChild" in parent)) {
-      throw new Error(`Cannot append to node with ID ${parentId}`);
-    }
-    parent.appendChild(vector);
-  }
-  
-  return {
-    id: vector.id,
-    name: vector.name,
-    type: vector.type
-  };
-}
-
-// Create a boolean operation (union, subtract, etc.)
-async function createBooleanOperation(params) {
-  const { nodeIds, operation, name } = params;
-  
-  if (!nodeIds || !Array.isArray(nodeIds) || nodeIds.length < 2) {
-    throw new Error("At least two node IDs are required for a boolean operation");
-  }
-  
-  // Get nodes by IDs
-  const nodes = [];
-  for (const id of nodeIds) {
-    const node = figma.getNodeById(id);
-    if (!node) {
-      throw new Error(`Node with ID ${id} not found`);
-    }
-    nodes.push(node);
-  }
-  
-  // Create boolean operation
-  let booleanOperation;
-  
-  switch (operation) {
-    case "UNION":
-      booleanOperation = figma.union(nodes, nodes[0].parent);
-      break;
-    case "SUBTRACT":
-      booleanOperation = figma.subtract(nodes, nodes[0].parent);
-      break;
-    case "INTERSECT":
-      booleanOperation = figma.intersect(nodes, nodes[0].parent);
-      break;
-    case "EXCLUDE":
-      booleanOperation = figma.exclude(nodes, nodes[0].parent);
-      break;
-    default:
-      throw new Error(`Unknown boolean operation: ${operation}`);
-  }
-  
-  // Set name if provided
-  if (name) {
-    booleanOperation.name = name;
-  }
-  
-  return {
-    id: booleanOperation.id,
-    name: booleanOperation.name,
-    type: booleanOperation.type,
-    operation: operation
-  };
-}
-
-// Apply effect (shadow, blur) to a node
-async function applyEffect(params) {
-  const { nodeId, effectType, radius, color, offset } = params;
-  
-  // Get the node by ID
-  const node = figma.getNodeById(nodeId);
-  if (!node) {
-    throw new Error(`Node with ID ${nodeId} not found`);
-  }
-  
-  // Check if node supports effects
-  if (!("effects" in node)) {
-    throw new Error(`Node type ${node.type} does not support effects`);
-  }
-  
-  // Create the effect object
-  let effect = { type: effectType };
-  
-  // Set effect properties based on type
-  switch (effectType) {
-    case "DROP_SHADOW":
-    case "INNER_SHADOW":
-      if (!color) {
-        throw new Error(`Color is required for ${effectType}`);
-      }
-      if (!offset) {
-        throw new Error(`Offset is required for ${effectType}`);
-      }
-      
-      effect.color = {
-        r: color.r,
-        g: color.g,
-        b: color.b,
-        a: color.a !== undefined ? color.a : 1
-      };
-      effect.offset = {
-        x: offset.x,
-        y: offset.y
-      };
-      effect.radius = radius;
-      effect.visible = true;
-      effect.blendMode = "NORMAL";
-      break;
-      
-    case "LAYER_BLUR":
-    case "BACKGROUND_BLUR":
-      effect.radius = radius;
-      effect.visible = true;
-      break;
-      
-    default:
-      throw new Error(`Unknown effect type: ${effectType}`);
-  }
-  
-  // Apply the effect
-  const effects = [...node.effects];
-  effects.push(effect);
-  node.effects = effects;
-  
-  return {
-    id: node.id,
-    name: node.name,
-    type: node.type,
-    effectType: effectType
-  };
-}
-
-// Create a component set (for variants)
-async function createComponentSet(params) {
-  const { components, name } = params;
-  
-  if (!components || !Array.isArray(components) || components.length < 1) {
-    throw new Error("At least one component is required to create a component set");
-  }
-  
-  // Get component nodes by IDs
-  const componentNodes = [];
-  for (const comp of components) {
-    const node = figma.getNodeById(comp.nodeId);
-    if (!node) {
-      throw new Error(`Node with ID ${comp.nodeId} not found`);
-    }
-    
-    // Check if node is a component
-    if (node.type !== "COMPONENT") {
-      throw new Error(`Node with ID ${comp.nodeId} is not a component`);
-    }
-    
-    // Set component properties
-    for (const [key, value] of Object.entries(comp.properties)) {
-      // Note: In real implementation, we'd need to use the Figma API to set variant properties
-      // This is a simplified version
-      node.setRelaunchData({ [key]: value });
-    }
-    
-    componentNodes.push(node);
-  }
-  
-  // Create component set
-  // Note: This is a simplified implementation. In reality, creating component sets
-  // with variants requires more complex code
-  const parent = componentNodes[0].parent;
-  const componentSet = figma.combineAsVariants(componentNodes, parent);
-  
-  // Set name if provided
-  if (name) {
-    componentSet.name = name;
-  }
-  
-  return {
-    id: componentSet.id,
-    name: componentSet.name,
-    type: componentSet.type,
-    childrenCount: componentSet.children.length
-  };
-}
-
-// Set constraints for a node
-async function setConstraints(params) {
-  const { nodeId, horizontal, vertical } = params;
-  
-  // Get the node by ID
-  const node = figma.getNodeById(nodeId);
-  if (!node) {
-    throw new Error(`Node with ID ${nodeId} not found`);
-  }
-  
-  // Check if node supports constraints
-  if (!("constraints" in node)) {
-    throw new Error(`Node type ${node.type} does not support constraints`);
-  }
-  
-  // Set constraints
-  node.constraints = {
-    horizontal,
-    vertical
-  };
-  
-  return {
-    id: node.id,
-    name: node.name,
-    type: node.type,
-    constraints: {
-      horizontal: node.constraints.horizontal,
-      vertical: node.constraints.vertical
-    }
-  };
-}
