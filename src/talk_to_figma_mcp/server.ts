@@ -507,10 +507,10 @@ server.tool(
   }
 );
 
-// Get UI Kit Libraries Tool
+// UI Kit Libraries Tool
 server.tool(
-  "get_ui_kit_libraries",
-  "Get all available design system libraries like iOS or Material Design kits in Figma",
+  "mcp_TalkToFigma_get_ui_kit_libraries",
+  "Get available design system libraries (iOS, Material Design)",
   {},
   async () => {
     try {
@@ -536,13 +536,13 @@ server.tool(
   }
 );
 
-// Get UI Kit Components Tool
+// UI Kit Components Tool
 server.tool(
-  "get_ui_kit_components",
-  "Get all components from a specific design system library (e.g., iOS or Material Design kit)",
+  "mcp_TalkToFigma_get_ui_kit_components",
+  "Get components from a specific design system by name and category",
   {
-    libraryName: z.string().describe("Name of the design library (e.g., 'iOS 18 UI Kit', 'Material 3 Design Kit')"),
-    category: z.string().optional().describe("Optional category to filter components (e.g., 'Buttons', 'Navigation')")
+    libraryName: z.string().describe("The name of the design system library"),
+    category: z.string().optional().describe("Optional category to filter components")
   },
   async ({ libraryName, category }) => {
     try {
@@ -568,38 +568,33 @@ server.tool(
   }
 );
 
-// Create UI Kit Component Instance Tool
+// Create UI Kit Component Tool
 server.tool(
-  "create_ui_kit_component",
-  "Create an instance of a component from a design system library like iOS or Material Design",
+  "mcp_TalkToFigma_create_ui_kit_component",
+  "Create a component from a design system with properties",
   {
-    componentKey: z.string().describe("Key of the component to instantiate"),
+    libraryName: z.string().describe("The name of the design system library"),
+    componentName: z.string().describe("The name of the component to create"),
     x: z.number().describe("X position"),
     y: z.number().describe("Y position"),
-    scale: z.number().optional().describe("Scale factor for the component (default: 1)"),
-    parentId: z.string().optional().describe("Optional parent node ID"),
-    variants: z.record(z.string(), z.string()).optional().describe("Variant properties for the component"),
-    properties: z.record(z.string(), z.string()).optional().describe("Component properties to set")
+    properties: z.record(z.string()).optional().describe("Optional properties to set on the component"),
+    parentId: z.string().optional().describe("Optional parent node ID to append the component to")
   },
-  async ({ componentKey, x, y, scale, parentId, variants, properties }) => {
+  async ({ libraryName, componentName, x, y, properties, parentId }) => {
     try {
-      const result = await sendCommandToFigma('create_ui_kit_component', { 
-        componentKey, 
-        x, 
-        y, 
-        scale, 
-        parentId,
-        variants,
-        properties
+      const result = await sendCommandToFigma('create_ui_kit_component', {
+        libraryName,
+        componentName,
+        x,
+        y,
+        properties: properties || {},
+        parentId
       });
-      
-      const typedResult = result as { id: string, name: string };
-      
       return {
         content: [
           {
             type: "text",
-            text: `Created UI kit component with ID: ${typedResult.id}`
+            text: `Created UI kit component: ${JSON.stringify(result)}`
           }
         ]
       };
@@ -618,59 +613,37 @@ server.tool(
 
 // Create UI Kit Layout Tool
 server.tool(
-  "create_ui_kit_layout",
-  "Create a complete layout using components from a design system like iOS or Material Design",
+  "mcp_TalkToFigma_create_ui_kit_layout",
+  "Create a complete UI layout using design system components",
   {
-    layoutType: z.string().describe("Type of layout to create (e.g., 'ios_screen', 'material_card')"),
-    x: z.number().optional().describe("X position"),
-    y: z.number().optional().describe("Y position"),
-    width: z.number().optional().describe("Width of the layout"),
-    height: z.number().optional().describe("Height of the layout"),
-    kitName: z.string().describe("Name of the design kit (e.g., 'iOS 18 UI Kit', 'Material 3 Design Kit')"),
-    theme: z.enum(['light', 'dark']).optional().describe("Theme to apply ('light' or 'dark')"),
-    components: z.array(
-      z.object({
-        type: z.string().optional().describe("Component type (e.g., 'button', 'navigationBar')"),
-        name: z.string().optional().describe("Component name to search for if type is not specified"),
-        x: z.number().optional().describe("X position within layout"),
-        y: z.number().optional().describe("Y position within layout"),
-        properties: z.record(z.string(), z.string()).optional().describe("Component properties"),
-        // Additional properties for specific component types
-        title: z.string().optional().describe("Title for navigation bars"),
-        label: z.string().optional().describe("Label for buttons"),
-        buttonStyle: z.string().optional().describe("Style for buttons (e.g., 'filled', 'outlined')"),
-        size: z.string().optional().describe("Size for components (e.g., 'small', 'medium', 'large')")
-      })
-    ).optional().describe("Array of components to add to the layout"),
-    style: z.object({
-      backgroundColor: z.object({
-        r: z.number().min(0).max(1).optional().describe("Red component (0-1)"),
-        g: z.number().min(0).max(1).optional().describe("Green component (0-1)"),
-        b: z.number().min(0).max(1).optional().describe("Blue component (0-1)")
-      }).optional().describe("Background color override")
-    }).optional().describe("Style overrides for the layout")
+    libraryName: z.string().describe("The name of the design system library"),
+    layoutType: z.string().describe("The type of layout to create (e.g., 'login', 'profile', 'settings')"),
+    x: z.number().describe("X position"),
+    y: z.number().describe("Y position"),
+    width: z.number().optional().describe("Optional width of the layout"),
+    height: z.number().optional().describe("Optional height of the layout"),
+    theme: z.enum(['light', 'dark']).optional().describe("Optional theme for the layout"),
+    data: z.record(z.any()).optional().describe("Optional data to populate the layout"),
+    parentId: z.string().optional().describe("Optional parent node ID to append the layout to")
   },
-  async ({ layoutType, x, y, width, height, kitName, theme, components, style }) => {
+  async ({ libraryName, layoutType, x, y, width, height, theme, data, parentId }) => {
     try {
-      const result = await sendCommandToFigma('create_ui_kit_layout', { 
-        layoutType, 
-        x, 
-        y, 
-        width, 
-        height, 
-        kitName, 
-        theme, 
-        components, 
-        style
+      const result = await sendCommandToFigma('create_ui_kit_layout', {
+        libraryName,
+        layoutType,
+        x,
+        y,
+        width: width || 390, // Default to iPhone width
+        height: height || 844, // Default to iPhone 13 height
+        theme: theme || 'light',
+        data: data || {},
+        parentId
       });
-      
-      const typedResult = result as { id: string, name: string };
-      
       return {
         content: [
           {
             type: "text",
-            text: `Created UI kit layout "${typedResult.name}" with ID: ${typedResult.id}`
+            text: `Created UI kit layout: ${JSON.stringify(result)}`
           }
         ]
       };
