@@ -1,8 +1,4 @@
-# 🎨 Cursor Talk to Figma
-
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/129a14d2-ed73-470f-9a4c-2240b2a4885c" alt="Cursor Talk to Figma Demo" width="700">
-</p>
+# 🎨 Figma Cursor MCP
 
 <p align="center">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
