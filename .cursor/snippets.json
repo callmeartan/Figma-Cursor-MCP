@@ -1,0 +1,46 @@
+{
+  "snippets": [
+    {
+      "name": "Create Rectangle Function",
+      "description": "Function to create a rectangle in Figma",
+      "language": "typescript",
+      "code": "function createRectangle(x: number, y: number, width: number, height: number, name?: string, parentId?: string) {\n  return {\n    nodeId: parentId || '',\n    x: x,\n    y: y,\n    width: width,\n    height: height,\n    name: name || 'Rectangle'\n  };\n}"
+    },
+    {
+      "name": "Create Text Function",
+      "description": "Function to create text in Figma",
+      "language": "typescript",
+      "code": "function createText(x: number, y: number, text: string, fontSize?: number, fontColor?: { r: number, g: number, b: number, a?: number }) {\n  return {\n    x: x,\n    y: y,\n    text: text,\n    fontSize: fontSize || 14,\n    fontColor: fontColor || { r: 0, g: 0, b: 0, a: 1 }\n  };\n}"
+    },
+    {
+      "name": "Create Frame Function",
+      "description": "Function to create a frame in Figma",
+      "language": "typescript",
+      "code": "function createFrame(x: number, y: number, width: number, height: number, name?: string) {\n  return {\n    x: x,\n    y: y,\n    width: width,\n    height: height,\n    name: name || 'Frame'\n  };\n}"
+    },
+    {
+      "name": "Set Fill Color Function",
+      "description": "Function to set fill color in Figma",
+      "language": "typescript",
+      "code": "function setFillColor(nodeId: string, r: number, g: number, b: number, a?: number) {\n  return {\n    nodeId: nodeId,\n    r: r,\n    g: g,\n    b: b,\n    a: a || 1\n  };\n}"
+    },
+    {
+      "name": "Get Node Info Function",
+      "description": "Function to get node information from Figma",
+      "language": "typescript",
+      "code": "function getNodeInfo(nodeId: string) {\n  return {\n    nodeId: nodeId\n  };\n}"
+    },
+    {
+      "name": "WebSocket Setup",
+      "description": "Basic WebSocket setup code",
+      "language": "typescript",
+      "code": "import { WebSocket } from 'ws';\n\nconst ws = new WebSocket('ws://localhost:8080');\n\nws.on('open', () => {\n  console.log('Connected to WebSocket server');\n});\n\nws.on('message', (data) => {\n  const message = JSON.parse(data.toString());\n  console.log('Received:', message);\n});\n\nws.on('close', () => {\n  console.log('Disconnected from WebSocket server');\n});\n\nws.on('error', (error) => {\n  console.error('WebSocket error:', error);\n});"
+    },
+    {
+      "name": "MCP Handler Function",
+      "description": "Basic MCP handler function structure",
+      "language": "typescript",
+      "code": "async function handleMcpRequest(request: { method: string, params: any }) {\n  try {\n    const { method, params } = request;\n    \n    switch (method) {\n      case 'get_document_info':\n        return await getDocumentInfo();\n      case 'create_rectangle':\n        return await createRectangle(params.x, params.y, params.width, params.height, params.name);\n      // Add more cases as needed\n      default:\n        throw new Error(`Unknown method: ${method}`);\n    }\n  } catch (error) {\n    console.error('Error handling MCP request:', error);\n    throw error;\n  }\n}"
+    }
+  ]
+} 

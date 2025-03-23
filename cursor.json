@@ -1,0 +1,67 @@
+{
+  "projectName": "Figma-Cursor-MCP",
+  "projectDescription": "A MCP integration that connects Cursor AI with Figma, allowing for AI-driven design through natural language commands.",
+  "defaultLanguage": "typescript",
+  "includeFiles": [
+    "src/**/*.ts",
+    "src/**/*.js",
+    "src/**/*.html",
+    "src/**/*.json",
+    "*.json",
+    "*.md"
+  ],
+  "excludeFiles": [
+    "node_modules/**",
+    "bun.lock",
+    ".git/**",
+    "**/.DS_Store"
+  ],
+  "contextConfig": {
+    "retrievalMode": "hybrid",
+    "retrievalDepth": 3,
+    "contextRelevancyThreshold": 0.7
+  },
+  "codebaseContext": [
+    {
+      "name": "Project Overview",
+      "description": "This is a Model Context Protocol (MCP) integration that connects Cursor AI with Figma. It allows creating, modifying, and reading Figma designs through natural language commands.",
+      "files": [
+        "readme.md",
+        "package.json"
+      ]
+    },
+    {
+      "name": "Figma Plugin",
+      "description": "Figma plugin implementation that connects to the MCP server",
+      "files": [
+        "src/cursor_mcp_plugin/code.js",
+        "src/cursor_mcp_plugin/ui.html",
+        "src/cursor_mcp_plugin/manifest.json"
+      ]
+    },
+    {
+      "name": "MCP Server",
+      "description": "TypeScript MCP server implementation",
+      "files": [
+        "src/talk_to_figma_mcp/server.ts",
+        "src/talk_to_figma_mcp/mcp.d.ts",
+        "src/talk_to_figma_mcp/package.json"
+      ]
+    },
+    {
+      "name": "Socket Communication",
+      "description": "WebSocket communication layer between components",
+      "files": [
+        "src/socket.ts",
+        "src/bun.d.ts"
+      ]
+    },
+    {
+      "name": "Best Practices",
+      "description": "Best practices for designers using Figma",
+      "files": [
+        "best-practices.md"
+      ]
+    }
+  ]
+} 

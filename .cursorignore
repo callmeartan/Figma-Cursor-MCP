@@ -1,0 +1,5 @@
+node_modules/
+.git/
+bun.lock
+.DS_Store
+~ 
