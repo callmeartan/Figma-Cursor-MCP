@@ -90,10 +90,18 @@ async function handleCommand(command, params) {
       return await getStyles();
     case "get_local_components":
       return await getLocalComponents();
+    case "get_ui_kit_libraries":
+      return await getUIKitLibraries();
+    case "get_ui_kit_components":
+      return await getUIKitComponents(params);
     // case "get_team_components":
     //   return await getTeamComponents();
     case "create_component_instance":
       return await createComponentInstance(params);
+    case "create_ui_kit_component":
+      return await createUIKitComponent(params);
+    case "create_ui_kit_layout":
+      return await createUIKitLayout(params);
     case "export_node_as_image":
       return await exportNodeAsImage(params);
     case "execute_code":
@@ -679,6 +687,64 @@ async function getLocalComponents() {
   };
 }
 
+// Get available UI kit libraries
+async function getUIKitLibraries() {
+  try {
+    // Get all available libraries from Figma
+    const libraries = await figma.teamLibrary.getAvailableLibrariesAsync();
+    
+    return {
+      count: libraries.length,
+      libraries: libraries.map(lib => ({
+        id: lib.id,
+        name: lib.name,
+        libraryType: lib.libraryType
+      }))
+    };
+  } catch (error) {
+    throw new Error(`Error getting UI kit libraries: ${error.message}`);
+  }
+}
+
+// Get components from a specific UI kit
+async function getUIKitComponents(params) {
+  const { libraryName, category } = params || {};
+  
+  if (!libraryName) {
+    throw new Error("Missing libraryName parameter");
+  }
+
+  try {
+    // Get all available components from the specified library
+    const allComponents = await figma.teamLibrary.getAvailableComponentsAsync();
+    
+    // Filter components by library name
+    let components = allComponents.filter(comp => comp.libraryName === libraryName);
+    
+    // Further filter by category if specified
+    if (category) {
+      components = components.filter(comp => {
+        // Categories in Figma are often indicated by "/" in component names
+        // e.g., "Buttons/Primary", "Icons/Navigation", etc.
+        const categories = comp.name.split('/');
+        return categories[0].trim().toLowerCase() === category.toLowerCase();
+      });
+    }
+    
+    return {
+      count: components.length,
+      components: components.map(comp => ({
+        key: comp.key,
+        name: comp.name,
+        description: comp.description || '',
+        libraryName: comp.libraryName
+      }))
+    };
+  } catch (error) {
+    throw new Error(`Error getting UI kit components: ${error.message}`);
+  }
+}
+
 // async function getTeamComponents() {
 //   try {
 //     const teamComponents =
@@ -725,6 +791,327 @@ async function createComponentInstance(params) {
     };
   } catch (error) {
     throw new Error(`Error creating component instance: ${error.message}`);
+  }
+}
+
+// Create a UI kit component with more options
+async function createUIKitComponent(params) {
+  const { 
+    componentKey, 
+    x = 0, 
+    y = 0, 
+    scale = 1,
+    parentId,
+    variants = {}, // Object with properties to set for component variants
+    properties = {}  // Component properties to set
+  } = params || {};
+
+  if (!componentKey) {
+    throw new Error("Missing componentKey parameter");
+  }
+
+  try {
+    // Import the component by key from library
+    const component = await figma.importComponentByKeyAsync(componentKey);
+    const instance = component.createInstance();
+
+    // Position the component
+    instance.x = x;
+    instance.y = y;
+    
+    // Scale if needed
+    if (scale !== 1) {
+      instance.resize(instance.width * scale, instance.height * scale);
+    }
+    
+    // Set component properties if supported and provided
+    if (instance.componentProperties && Object.keys(properties).length > 0) {
+      // Create a new properties object with only valid properties
+      const validProperties = {};
+      
+      // Check which properties exist on the component
+      for (const [key, value] of Object.entries(properties)) {
+        if (key in instance.componentProperties) {
+          validProperties[key] = value;
+        }
+      }
+      
+      // Set the valid properties
+      if (Object.keys(validProperties).length > 0) {
+        instance.setProperties(validProperties);
+      }
+    }
+    
+    // Set variant properties (older method for backward compatibility)
+    if (Object.keys(variants).length > 0 && "variantProperties" in instance) {
+      for (const [key, value] of Object.entries(variants)) {
+        if (key in instance.variantProperties) {
+          instance.variantProperties[key] = value;
+        }
+      }
+    }
+    
+    // Add to parent or current page
+    if (parentId) {
+      const parentNode = await figma.getNodeByIdAsync(parentId);
+      if (!parentNode) {
+        throw new Error(`Parent node not found with ID: ${parentId}`);
+      }
+      if (!("appendChild" in parentNode)) {
+        throw new Error(`Parent node does not support children: ${parentId}`);
+      }
+      parentNode.appendChild(instance);
+    } else {
+      figma.currentPage.appendChild(instance);
+    }
+
+    return {
+      id: instance.id,
+      name: instance.name,
+      x: instance.x,
+      y: instance.y,
+      width: instance.width,
+      height: instance.height,
+      componentId: instance.componentId,
+      hasComponentProperties: "componentProperties" in instance,
+      propertyKeys: instance.componentProperties ? Object.keys(instance.componentProperties) : []
+    };
+  } catch (error) {
+    throw new Error(`Error creating UI kit component: ${error.message}`);
+  }
+}
+
+// Create a layout using UI kit components
+async function createUIKitLayout(params) {
+  const {
+    layoutType, // e.g., 'ios_screen', 'material_card', etc.
+    x = 0,
+    y = 0,
+    width,
+    height, 
+    kitName, // e.g., 'iOS 18 UI Kit', 'Material 3 Design Kit'
+    theme = 'light', // 'light' or 'dark'
+    components = [], // Array of component details to add to the layout
+    style = {} // Style overrides
+  } = params || {};
+
+  if (!layoutType) {
+    throw new Error("Missing layoutType parameter");
+  }
+
+  if (!kitName) {
+    throw new Error("Missing kitName parameter");
+  }
+
+  try {
+    // Create a frame for the layout
+    const frame = figma.createFrame();
+    frame.name = `${kitName} - ${layoutType}`;
+    frame.x = x;
+    frame.y = y;
+    
+    // Set width and height
+    frame.resize(
+      width || (layoutType.includes('ios') ? 390 : 360), 
+      height || (layoutType.includes('ios') ? 844 : 800)
+    );
+
+    // Apply auto layout if needed
+    if (layoutType.includes('list') || layoutType.includes('card')) {
+      frame.layoutMode = 'VERTICAL';
+      frame.itemSpacing = 8;
+      frame.paddingLeft = frame.paddingRight = 16;
+      frame.paddingTop = frame.paddingBottom = 16;
+    }
+    
+    // Apply theme-specific styling
+    if (theme === 'dark') {
+      // Dark theme for iOS or Material
+      if (layoutType.includes('ios')) {
+        frame.fills = [{ type: 'SOLID', color: { r: 0, g: 0, b: 0 } }];
+      } else { // Material
+        frame.fills = [{ type: 'SOLID', color: { r: 0.1, g: 0.1, b: 0.1 } }];
+      }
+    } else {
+      // Light theme for iOS or Material
+      if (layoutType.includes('ios')) {
+        frame.fills = [{ type: 'SOLID', color: { r: 0.98, g: 0.98, b: 0.98 } }];
+      } else { // Material
+        frame.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
+      }
+    }
+    
+    // Apply custom styles if provided
+    if (style.backgroundColor) {
+      frame.fills = [{
+        type: 'SOLID',
+        color: {
+          r: style.backgroundColor.r || 1,
+          g: style.backgroundColor.g || 1,
+          b: style.backgroundColor.b || 1
+        }
+      }];
+    }
+    
+    // Create a collection to track created nodes
+    const createdNodes = [];
+    
+    // Create each component based on type
+    if (components && components.length > 0) {
+      let yOffset = 16; // Starting Y position for components
+      
+      for (const component of components) {
+        let node;
+        const componentDetails = {
+          x: component.x || 16,
+          y: component.y || yOffset,
+          parentId: frame.id
+        };
+        
+        // Add component based on type
+        switch (component.type) {
+          case 'statusBar':
+            // For iOS or Material status bar
+            if (layoutType.includes('ios')) {
+              // Search for iOS status bar in the kit
+              const statusBarComponents = await figma.teamLibrary.getAvailableComponentsAsync();
+              const iosStatusBar = statusBarComponents.find(c => 
+                c.libraryName.includes(kitName) && 
+                c.name.toLowerCase().includes('status bar')
+              );
+              
+              if (iosStatusBar) {
+                // Create status bar component
+                const statusBar = await createUIKitComponent({
+                  componentKey: iosStatusBar.key,
+                  ...componentDetails,
+                  properties: { appearance: theme === 'dark' ? 'dark' : 'light' }
+                });
+                node = await figma.getNodeByIdAsync(statusBar.id);
+                node.resize(frame.width, node.height); // Make it full width
+              }
+            } else {
+              // Material status bar logic
+              // Similar approach as iOS but with Material component names
+            }
+            break;
+            
+          case 'navigationBar':
+            // For iOS or Material navigation bar
+            if (layoutType.includes('ios')) {
+              const navComponents = await figma.teamLibrary.getAvailableComponentsAsync();
+              const iosNavBar = navComponents.find(c => 
+                c.libraryName.includes(kitName) && 
+                c.name.toLowerCase().includes('navigation bar') || 
+                c.name.toLowerCase().includes('navbar')
+              );
+              
+              if (iosNavBar) {
+                // Create navbar component
+                const navBar = await createUIKitComponent({
+                  componentKey: iosNavBar.key,
+                  ...componentDetails,
+                  properties: { 
+                    appearance: theme === 'dark' ? 'dark' : 'light',
+                    title: component.title || 'Screen Title'
+                  }
+                });
+                node = await figma.getNodeByIdAsync(navBar.id);
+                node.resize(frame.width, node.height); // Make it full width
+              }
+            } else {
+              // Material app bar logic
+            }
+            break;
+            
+          case 'button':
+            // Create a button based on the design system
+            if (layoutType.includes('ios')) {
+              const buttonComponents = await figma.teamLibrary.getAvailableComponentsAsync();
+              const iosButton = buttonComponents.find(c => 
+                c.libraryName.includes(kitName) && 
+                c.name.toLowerCase().includes('button')
+              );
+              
+              if (iosButton) {
+                // Create button component
+                const button = await createUIKitComponent({
+                  componentKey: iosButton.key,
+                  ...componentDetails,
+                  properties: { 
+                    label: component.label || 'Button',
+                    style: component.buttonStyle || 'filled',
+                    size: component.size || 'medium'
+                  }
+                });
+                node = await figma.getNodeByIdAsync(button.id);
+              }
+            } else {
+              // Material button logic
+            }
+            break;
+            
+          // Add more component types as needed
+          case 'tabBar':
+          case 'card':
+          case 'textField':
+          case 'icon':
+            // Similar implementation as above cases
+            break;
+            
+          default:
+            // If component type isn't specific, try to find by name
+            if (component.name) {
+              const allComponents = await figma.teamLibrary.getAvailableComponentsAsync();
+              const matchedComponent = allComponents.find(c => 
+                c.libraryName.includes(kitName) && 
+                c.name.toLowerCase().includes(component.name.toLowerCase())
+              );
+              
+              if (matchedComponent) {
+                // Create the found component
+                const created = await createUIKitComponent({
+                  componentKey: matchedComponent.key,
+                  ...componentDetails,
+                  properties: component.properties || {}
+                });
+                node = await figma.getNodeByIdAsync(created.id);
+              }
+            }
+            break;
+        }
+        
+        if (node) {
+          createdNodes.push({
+            id: node.id,
+            name: node.name,
+            type: node.type,
+            x: node.x,
+            y: node.y,
+            width: node.width,
+            height: node.height
+          });
+          
+          // Update yOffset for next component if using auto layout
+          if (!component.x && !component.y) {
+            yOffset += node.height + 16; // 16px spacing
+          }
+        }
+      }
+    }
+    
+    return {
+      id: frame.id,
+      name: frame.name,
+      type: frame.type,
+      x: frame.x,
+      y: frame.y,
+      width: frame.width,
+      height: frame.height,
+      children: createdNodes
+    };
+  } catch (error) {
+    throw new Error(`Error creating UI kit layout: ${error.message}`);
   }
 }
 

@@ -507,6 +507,186 @@ server.tool(
   }
 );
 
+// Get UI Kit Libraries Tool
+server.tool(
+  "get_ui_kit_libraries",
+  "Get all available design system libraries like iOS or Material Design kits in Figma",
+  {},
+  async () => {
+    try {
+      const result = await sendCommandToFigma('get_ui_kit_libraries');
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error getting UI kit libraries: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+// Get UI Kit Components Tool
+server.tool(
+  "get_ui_kit_components",
+  "Get all components from a specific design system library (e.g., iOS or Material Design kit)",
+  {
+    libraryName: z.string().describe("Name of the design library (e.g., 'iOS 18 UI Kit', 'Material 3 Design Kit')"),
+    category: z.string().optional().describe("Optional category to filter components (e.g., 'Buttons', 'Navigation')")
+  },
+  async ({ libraryName, category }) => {
+    try {
+      const result = await sendCommandToFigma('get_ui_kit_components', { libraryName, category });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error getting UI kit components: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+// Create UI Kit Component Instance Tool
+server.tool(
+  "create_ui_kit_component",
+  "Create an instance of a component from a design system library like iOS or Material Design",
+  {
+    componentKey: z.string().describe("Key of the component to instantiate"),
+    x: z.number().describe("X position"),
+    y: z.number().describe("Y position"),
+    scale: z.number().optional().describe("Scale factor for the component (default: 1)"),
+    parentId: z.string().optional().describe("Optional parent node ID"),
+    variants: z.record(z.string(), z.string()).optional().describe("Variant properties for the component"),
+    properties: z.record(z.string(), z.string()).optional().describe("Component properties to set")
+  },
+  async ({ componentKey, x, y, scale, parentId, variants, properties }) => {
+    try {
+      const result = await sendCommandToFigma('create_ui_kit_component', { 
+        componentKey, 
+        x, 
+        y, 
+        scale, 
+        parentId,
+        variants,
+        properties
+      });
+      
+      const typedResult = result as { id: string, name: string };
+      
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Created UI kit component with ID: ${typedResult.id}`
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error creating UI kit component: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+// Create UI Kit Layout Tool
+server.tool(
+  "create_ui_kit_layout",
+  "Create a complete layout using components from a design system like iOS or Material Design",
+  {
+    layoutType: z.string().describe("Type of layout to create (e.g., 'ios_screen', 'material_card')"),
+    x: z.number().optional().describe("X position"),
+    y: z.number().optional().describe("Y position"),
+    width: z.number().optional().describe("Width of the layout"),
+    height: z.number().optional().describe("Height of the layout"),
+    kitName: z.string().describe("Name of the design kit (e.g., 'iOS 18 UI Kit', 'Material 3 Design Kit')"),
+    theme: z.enum(['light', 'dark']).optional().describe("Theme to apply ('light' or 'dark')"),
+    components: z.array(
+      z.object({
+        type: z.string().optional().describe("Component type (e.g., 'button', 'navigationBar')"),
+        name: z.string().optional().describe("Component name to search for if type is not specified"),
+        x: z.number().optional().describe("X position within layout"),
+        y: z.number().optional().describe("Y position within layout"),
+        properties: z.record(z.string(), z.string()).optional().describe("Component properties"),
+        // Additional properties for specific component types
+        title: z.string().optional().describe("Title for navigation bars"),
+        label: z.string().optional().describe("Label for buttons"),
+        buttonStyle: z.string().optional().describe("Style for buttons (e.g., 'filled', 'outlined')"),
+        size: z.string().optional().describe("Size for components (e.g., 'small', 'medium', 'large')")
+      })
+    ).optional().describe("Array of components to add to the layout"),
+    style: z.object({
+      backgroundColor: z.object({
+        r: z.number().min(0).max(1).optional().describe("Red component (0-1)"),
+        g: z.number().min(0).max(1).optional().describe("Green component (0-1)"),
+        b: z.number().min(0).max(1).optional().describe("Blue component (0-1)")
+      }).optional().describe("Background color override")
+    }).optional().describe("Style overrides for the layout")
+  },
+  async ({ layoutType, x, y, width, height, kitName, theme, components, style }) => {
+    try {
+      const result = await sendCommandToFigma('create_ui_kit_layout', { 
+        layoutType, 
+        x, 
+        y, 
+        width, 
+        height, 
+        kitName, 
+        theme, 
+        components, 
+        style
+      });
+      
+      const typedResult = result as { id: string, name: string };
+      
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Created UI kit layout "${typedResult.name}" with ID: ${typedResult.id}`
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error creating UI kit layout: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ]
+      };
+    }
+  }
+);
+
 // Get Team Components Tool
 // server.tool(
 //   "get_team_components",
@@ -828,7 +1008,11 @@ type FigmaCommand =
   | 'create_boolean_operation'
   | 'apply_effect'
   | 'create_component_set'
-  | 'set_constraints';
+  | 'set_constraints'
+  | 'get_ui_kit_libraries'
+  | 'get_ui_kit_components'
+  | 'create_ui_kit_component'
+  | 'create_ui_kit_layout';
 
 // Helper function to process Figma node responses
 function processFigmaNodeResponse(result: unknown): any {

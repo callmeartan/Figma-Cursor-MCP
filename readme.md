@@ -23,6 +23,8 @@ Unlock the power of **AI-driven design** with a seamless bridge between Cursor A
 - 🧩 **Component Magic** - Work with Figma components through AI
 - 🎭 **Style Transformation** - Apply styling changes with natural language
 - 📊 **Layout Control** - Position, resize, and organize elements with precision
+- 📱 **Design System Integration** - Create professional UI with iOS and Material Design kits
+- 🎨 **Themed Layouts** - Quickly build light/dark themed interfaces with design system components
 
 ## ⚡ Quick Start
 
@@ -101,6 +103,15 @@ Add the server to your Cursor MCP configuration in `~/.cursor/mcp.json`:
 | `create_text` | Create text elements |
 | `create_component_instance` | Create an instance of a component |
 
+### UI Kit & Design System Commands
+
+| Command | Description |
+|---------|-------------|
+| `get_ui_kit_libraries` | Get available design system libraries (iOS, Material Design) |
+| `get_ui_kit_components` | Get components from a specific design system by name and category |
+| `create_ui_kit_component` | Create a component from a design system with properties |
+| `create_ui_kit_layout` | Create complete UI layouts using design system components |
+
 ### Styling Commands
 
 | Command | Description |
@@ -139,6 +150,9 @@ Add the server to your Cursor MCP configuration in `~/.cursor/mcp.json`:
 3. **Work with Components** - Use component instances for design consistency
 4. **Verify Changes** - Use `get_node_info` after modifications
 5. **Handle Errors** - Commands may throw exceptions, be ready to handle them
+6. **Explore UI Kits** - Use `get_ui_kit_libraries` to discover available design systems
+7. **Design System Consistency** - Create complete layouts with `create_ui_kit_layout` for consistent design language
+8. **Component Properties** - Set component properties when creating UI kit components for customization
 
 ## 🏗️ Project Architecture
 
